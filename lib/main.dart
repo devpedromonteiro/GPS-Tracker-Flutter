@@ -1,6 +1,9 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart' as Geocoding;
 import 'package:location/location.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 void main() {
   runApp(MyApp());
@@ -23,6 +26,25 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const latIng = LatLng(37.773972, -122.431297);
+  static const _initialCameraPosition = CameraPosition(
+    target: latIng,
+    zoom: 11.5,
+  );
+
+  CameraPosition _getCameraPosition(double latitude, double longitude) {
+    return CameraPosition(
+    target: LatLng(latitude, longitude),
+    zoom: 11.5,
+  );
+  }
+
+  GoogleMapController? mapController;
+
+  void _onMapCreated(GoogleMapController controller) {
+    mapController = controller;
+  }
+
   late bool _serviceEnabled; //verificar o GPS (on/off)
   late PermissionStatus _permissionGranted; //verificar a permissão de acesso
   LocationData? _userLocation;
@@ -64,7 +86,7 @@ class _HomePageState extends State<HomePage> {
         Geocoding.Placemark place = value[1];
         address = place.street; //nome da rua
         print(_locationData.accuracy); //acurácia da localização
-      }); 
+      });
     });
   }
 
@@ -75,8 +97,17 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ElevatedButton(
-                onPressed: _getUserLocation, child: Text('Get location')),
+          if (_userLocation != null)
+            SizedBox(
+              key: Key('mapa'),
+              width: 380,
+              height: 600,
+              child: GoogleMap(
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                initialCameraPosition: _getCameraPosition(_userLocation!.latitude as double, _userLocation!.longitude as double),
+              ),
+            ),
             if (_userLocation != null)
               Text(
                 'LAT: ${_userLocation!.latitude}, LNG: ${_userLocation!.longitude}' +
@@ -84,6 +115,8 @@ class _HomePageState extends State<HomePage> {
                     address!,
                 textAlign: TextAlign.center,
               ),
+            ElevatedButton(
+                onPressed: _getUserLocation, child: Text('Get location')),
           ],
         ),
       ),
