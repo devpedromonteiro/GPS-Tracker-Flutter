@@ -6,9 +6,8 @@ import 'package:geocoding/geocoding.dart' as Geocoding;
 import 'package:gps_tracker/entitys/user_location.dart';
 import 'package:location/location.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
 import 'package:gps_tracker/directions_model.dart';
-import 'package:gps_tracker/directions_repository.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:gps_tracker/db/database.dart';
 
 Future<void> main() async {
@@ -23,7 +22,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-        home: HomePage(
+      debugShowCheckedModeBanner: false,
+      home: HomePage(
       db: db,
     ));
   }
@@ -37,28 +37,57 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  
+  PolylinePoints polylinePoints = PolylinePoints();
+
+  // List<LatLng> polylineCoordinates = [];
+  // Map<PolylineId, Polyline> polylines = {};
+  // late PolylineResult resultPolyline;
+  // void _retornaLinhaPoligonal() async => {
+  //       resultPolyline = await polylinePoints.getRouteBetweenCoordinates(
+  //           'AIzaSyC7hXgme54H0G6u97zkSXwofxQoOmpFTkc',
+  //           PointLatLng(-8.894562, -36.472500),
+  //           PointLatLng(-8.888753, -36.473272),
+  //       travelMode: TravelMode.driving,
+  //       wayPoints: [PolylineWayPoint(location: "Sabo, Yaba Lagos Nigeria")]),
+  //   if (result.points.isNotEmpty) {
+  //     result.points.forEach((PointLatLng point) {
+  //       polylineCoordinates.add(LatLng(point.latitude, point.longitude));
+  //     }),
+  //   }
+  //      _addPolyLine(),
+  //     };
+  // _addPolyLine() {
+  //   PolylineId id = PolylineId("poly");
+  //   Polyline polyline = Polyline(
+  //       polylineId: id, color: Colors.red, points: polylineCoordinates);
+  //   polylines[id] = polyline;
+  //   setState(() {});
+  // }
+  //
+
   late bool _serviceEnabled; //verificar o GPS (on/off)
   late PermissionStatus _permissionGranted; //verificar a permissão de acesso
-  LocationData? _userLocation;
   late String? address;
-  late double? _latitude;
-  late double? _longitude;
+  late Timer _mytimer;
+  late var result;
+  late UserLocation userLocation;
+  final AppDatabase db;
+  LocationData? _userLocation;
   GoogleMapController? _googleMapController;
   Marker? _origin;
   bool? _isTracking = false;
   Marker? _destination;
   Directions? _info;
-  final AppDatabase db;
-  late Timer _mytimer;
   _HomePageState(this.db);
-  late UserLocation userLocation;
-  late var result;
-  var counter = 10;
+
+  // Initial position of camera
   static CameraPosition _initialCameraPosition = CameraPosition(
     target: LatLng(37.773972, -122.431297),
     zoom: 11.5,
   );
 
+  // Alterar a posição da camera
   CameraPosition _getCameraPosition(double latitude, double longitude) {
     return CameraPosition(
       target: LatLng(latitude, longitude),
@@ -66,10 +95,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Inicializando o controller do mapa
   void _onMapCreated(GoogleMapController controller) {
     _googleMapController = controller;
   }
+  
+  // Finalizar o controller do google map
+  @override
+  void dispose() {
+    _googleMapController!.dispose();
+    super.dispose();
+  }
 
+  // Captura localização do user
   Future<void> _getUserLocation() async {
     Location location = Location();
 
@@ -116,17 +154,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
-  void dispose() {
-    _googleMapController!.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
-        title: const Text('Google Maps'),
+        title: const Text('GPS Tracker'),
         actions: [
           if (_origin != null)
             TextButton(
@@ -170,6 +202,7 @@ class _HomePageState extends State<HomePage> {
         alignment: Alignment.center,
         children: [
           GoogleMap(
+            myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             initialCameraPosition: _userLocation?.latitude != null
@@ -194,7 +227,7 @@ class _HomePageState extends State<HomePage> {
             },
             onLongPress: _addMarker,
           ),
-          if (_info != null)
+          if (_info != null) //
             Positioned(
               top: 20.0,
               child: Container(
@@ -226,60 +259,42 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                // if (_userLocation != null)
-                //   SizedBox(
-                //     key: Key('mapa'),
-                //     width: 380,
-                //     height: 600,
-                //     child: GoogleMap(
-                //       myLocationButtonEnabled: false,
-                //       zoomControlsEnabled: false,
-                //       initialCameraPosition: _getCameraPosition(
-                //           _userLocation!.latitude as double,
-                //           _userLocation!.longitude as double),
-                //     ),
-                //   ),
-
                 if (_userLocation != null)
-                  Text(
-                    'LAT: ${_userLocation!.latitude}, LNG: ${_userLocation!.longitude}' +
-                        "\n",
-                    // + addres pode ser usado aqui
-                    textAlign: TextAlign.center,
-                  ),
-                ElevatedButton(
+                  ElevatedButton(
                     onPressed: () => {
                           _startTracking(),
-                          // _mytimer?.cancel(),
-                          _mytimer =
-                              Timer.periodic(Duration(seconds: 5), (timer) async {
-                            // counter--;
+                          _mytimer = Timer.periodic(Duration(seconds: 5),
+                              (timer) async {
                             if (_isTracking!) {
-                              // _mytimer?.cancel();
                               _getUserLocation();
                               print('teste');
-                              
-                              
+
                               userLocation = UserLocation(
                                   null,
                                   _userLocation!.latitude!,
                                   _userLocation!.longitude!);
                               await db.userLocationDao
                                   .insertUserLocation(userLocation);
-                              result = db.userLocationDao
-                                  .findUserLocationById(1);
+                              result =
+                                  db.userLocationDao.findUserLocationById(1);
                               print(result.toString());
-                              print('snapshot.hasData?' ':' '');
-                                      
-                                  
+
+                              () => _googleMapController!.animateCamera(
+                                  _info != null
+                                      ? CameraUpdate.newLatLngBounds(
+                                          _info!.bounds, 100.0)
+                                      : CameraUpdate.newCameraPosition(
+                                          _initialCameraPosition));
                             }
                           })
                         },
                     child: Text(
-                        _isTracking! ? 'Stop tracking' : 'Start tracking')),
+                        _isTracking! ? 'Stop tracking' : 'Start tracking'
+                      )
+                    ),
                 if (_userLocation != null)
                   SizedBox(
-                    key: Key('mapa'),
+                    key: Key('lista-de-cordenadas'),
                     width: 380,
                     height: 600,
                     child: FutureBuilder<List<UserLocation>>(
@@ -290,14 +305,13 @@ class _HomePageState extends State<HomePage> {
                                 itemCount: snapshot.data!.length,
                                 itemBuilder: (context, index) {
                                   print(snapshot.data!.length);
-                                  print(snapshot.data![index].latitude
-                                      .toString());
+                                  print(snapshot.data![index].latitude.toString());
                                   return Text(snapshot.data![index].latitude
                                           .toString() +
-                                      " " +
+                                          " " +
                                       snapshot.data![0].longitude.toString());
                                 })
-                            : Text('teste');
+                            : Text('Sem dados');
                       },
                     ),
                   ),
@@ -325,6 +339,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Adiciona um marcador no mapa
   void _addMarker(LatLng pos) async {
     if (_origin == null || (_origin != null && _destination != null)) {
       // Origin is not set OR Origin/Destination are both set
@@ -334,7 +349,7 @@ class _HomePageState extends State<HomePage> {
           markerId: const MarkerId('origin'),
           infoWindow: const InfoWindow(title: 'Origin'),
           icon:
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
           position: pos,
         );
         // Reset destination
@@ -350,7 +365,7 @@ class _HomePageState extends State<HomePage> {
         _destination = Marker(
           markerId: const MarkerId('destination'),
           infoWindow: const InfoWindow(title: 'Destination'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
           position: pos,
         );
       });
